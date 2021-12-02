@@ -116,7 +116,10 @@
 
     protected override void OnInitialized()
     {
-        Software = SoftwareManager.GetAllSoftware().ToList();
+        @if (Config.GetValue<bool>("DebugMode"))
+        {
+            Software = SoftwareManager.GetAllSoftware().ToList();
+        }
     }
 
     private void SortByName(bool sortAcending)
