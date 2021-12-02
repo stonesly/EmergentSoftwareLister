@@ -1,0 +1,172 @@
+﻿@page "/"
+@using System.Text.RegularExpressions
+@using Microsoft.Extensions.Configuration
+@inject IConfiguration Config
+@inject IJSRuntime JsRuntime
+@inject ISoftwareManager SoftwareManager
+
+<div class="container">
+    <div class="row mt-4 ">
+        <div class="col-12">
+            <h4 class="card-title text-info">Software Product List</h4>
+        </div>
+    </div>
+    <div class="row">
+        <Validations Mode="ValidationMode.Auto" ValidateOnLoad="false">
+            <Validation Validator="@ValidatePhone">
+                <div class="col-md-4 mt-2">
+                    <TextEdit @bind-Text="VersionFilter" Placeholder="1.2.3">
+                        <Feedback>
+                            <ValidationError>Valid version numbers take the form of 1.2.3</ValidationError>
+                        </Feedback>
+                    </TextEdit>
+                </div>
+            </Validation>
+        </Validations>
+        <div class="col-md-2 mt-2">
+            <button class="btn btn-primary" type="submit" disabled="@(!ValidVersion)" @onclick="FilterSoftware">Filter By Version</button>
+        </div>
+    </div>
+
+    @if (Config.GetValue<bool>("DebugMode"))
+    {
+        <div class="row mt-4 ">
+            <div class="col-12">
+                <h5 class="card-title text-info">All Software</h5>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12">
+                <table class="table table-bordered table-hover table-striped">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th class="text-right">Version</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Software.Any())
+                        {
+                            foreach (var software in Software)
+                            {
+                                <tr>
+                                    <td>@software.Name</td>
+                                    <td class="text-right">@software.Version</td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="5">No records found</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <table class="table table-bordered table-hover table-striped">
+                <thead>
+                    <tr>
+                        @if (SortAscending)
+                        {
+                            <th><span>Name<i class="fas fa-sort-alpha-up float-right" @onclick="() => SortByName(false)"></i></span></th>
+                        }
+                        else
+                        {
+                            <th><span>Name<i class="fas fa-sort-alpha-down float-right" @onclick="() => SortByName(true)"></i></span></th>
+                        }
+                        <th class="text-right">Version</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (FilteredSoftware.Any())
+                    {
+                        foreach (var software in FilteredSoftware)
+                        {
+                            <tr>
+                                <td>@software.Name</td>
+                                <td class="text-right">@software.Version</td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="5">No records found</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+
+@code {
+    private List<Software> Software { get; set; } = new List<Software>();
+    private List<Software> FilteredSoftware { get; set; } = new List<Software>();
+    private bool ValidVersion;
+    private bool SortAscending { get; set; } = true;
+    private string VersionFilter;
+
+    protected override void OnInitialized()
+    {
+        Software = SoftwareManager.GetAllSoftware().ToList();
+    }
+
+    private void SortByName(bool sortAcending)
+    {
+        SortAscending = sortAcending;
+        if (SortAscending)
+        {
+            FilteredSoftware = FilteredSoftware.OrderBy(s => s.Name).ToList();
+        }
+        else
+        {
+            FilteredSoftware = FilteredSoftware.OrderByDescending(s => s.Name).ToList();
+        }
+    }
+
+    private void ValidatePhone(ValidatorEventArgs e)
+    {
+        if (e != null)
+        {
+            var phone = e.Value != null ? e.Value as string : string.Empty;
+
+            var regex = new Regex(@"^(0|[1-9]\d*)(\.(0|[1-9]\d*)){0,2}$");
+            ValidVersion = regex.IsMatch(e.Value?.ToString());
+
+            if (!ValidVersion)
+            {
+                e.Status = ValidationStatus.Error;
+            }
+            else
+            {
+                e.Status = ValidationStatus.Success;
+            }
+        }
+    }
+
+    private async Task FilterSoftware()
+    {
+        try
+        {
+            var vesionFilter = SoftwareHelper.NormalizeVersion(VersionFilter);
+
+            var versionSplit = vesionFilter.Split('.');
+
+            FilteredSoftware = SoftwareManager.FilterSoftwareByVersion(int.Parse(versionSplit[0]), int.Parse(versionSplit[1]), int.Parse(versionSplit[2]));
+            SortAscending = true;
+
+        }
+        catch (Exception e)
+        {
+            await JsRuntime.InvokeVoidAsync("ShowSwal", "error", e.Message);
+        }
+    }
+}
